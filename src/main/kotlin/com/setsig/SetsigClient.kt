@@ -20,11 +20,6 @@ data class SetsigConfig(
     val baseUrl: String = "https://api.setsig.com"
 )
 
-class SetsigException(
-    val statusCode: Int,
-    override val message: String
-) : Exception("Setsig API error ($statusCode): $message")
-
 class SetsigClient(
     val config: SetsigConfig,
     private val gson: Gson = Gson()
@@ -89,7 +84,47 @@ class SetsigClient(
             }
 
             if (!isSuccess) {
-                throw SetsigException(statusCode, responseText.ifEmpty { "HTTP $statusCode error" })
+                var errorCode = "ERR_API_ERROR"
+                var errorMsg = responseText.ifEmpty { "HTTP $statusCode error" }
+                var paywallUrl: String? = null
+                var curBal: Double? = null
+                var reqDeposit: Double? = null
+
+                try {
+                    val errJson = gson.fromJson(responseText, JsonObject::class.java)
+                    if (errJson != null) {
+                        if (errJson.has("error_code")) errorCode = errJson.get("error_code").asString
+                        else if (errJson.has("code")) errorCode = errJson.get("code").asString
+                        if (errJson.has("message")) errorMsg = errJson.get("message").asString
+
+                        if (errJson.has("details") && errJson.get("details").isJsonObject) {
+                            val det = errJson.getAsJsonObject("details")
+                            if (det.has("paywall_url")) paywallUrl = det.get("paywall_url").asString
+                            if (det.has("current_balance")) curBal = det.get("current_balance").asDouble
+                            if (det.has("required_min_topup")) reqDeposit = det.get("required_min_topup").asDouble
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                when (errorCode) {
+                    "ERR_PAYWALL_BLOCKED" -> throw PaywallBlockedException(paywallUrl, curBal, reqDeposit, errorMsg)
+                    "ERR_CROSS_BORDER_CREDIT_REQUIRED" -> throw CrossBorderCreditRequiredException(errorMsg)
+                    "ERR_PAYWALL_TIER_REQUIRED" -> throw PaywallTierRequiredException(errorMsg)
+                    "ERR_ATTESTATION_FAILED" -> throw AttestationFailedException(errorMsg)
+                    "ERR_VISUAL_PROOF_REQUIRED" -> throw VisualProofRequiredException(errorMsg)
+                    "ERR_STALE_VISUAL_PROOF" -> throw StaleVisualProofException(errorMsg)
+                    "ERR_INVALID_IMAGE_HASH" -> throw InvalidImageHashException(errorMsg)
+                    "ERR_GEOFENCE_OUT_OF_BOUNDS" -> throw GeofenceOutOfBoundsException(errorMsg)
+                    "ERR_REPLAY_DETECTED" -> throw ReplayAttackException(errorMsg)
+                    else -> {
+                        when (statusCode) {
+                            401, 403 -> throw AuthenticationException(errorMsg)
+                            402 -> throw InsufficientCreditsException(errorMsg)
+                            409 -> throw ReplayAttackException(errorMsg)
+                            else -> throw SetsigException(statusCode, errorCode, errorMsg)
+                        }
+                    }
+                }
             }
 
             // Check if response is wrapped in { "data": ... } envelope
