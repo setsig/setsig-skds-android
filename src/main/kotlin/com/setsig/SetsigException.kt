@@ -44,3 +44,4 @@ class GeofenceOutOfBoundsException(message: String = "Client coordinates outside
 
 class ReplayAttackException(message: String = "Single-use token already consumed (replay attack detected)", details: Any? = null) :
     SetsigException(409, "ERR_REPLAY_DETECTED", message, details)
+
