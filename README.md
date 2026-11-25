@@ -38,7 +38,7 @@ dependencies {
 import com.setsig.SetsigClient
 
 val client = SetsigClient(
-    apiKey = "sk_live_...",
+    apiKey = "pk_live_...",
     baseUrl = "https://api.setsig.com"
 )
 ```
