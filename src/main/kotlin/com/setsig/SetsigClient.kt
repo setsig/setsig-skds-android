@@ -68,6 +68,7 @@ class SetsigClient(
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Authorization", "Bearer ${config.apiKey}")
+            setRequestProperty("X-Setsig-Client", "sdk-android/0.8.0")
         }
 
         try {
